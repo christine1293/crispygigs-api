@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/gigs.js": {
+      "memory": 128
+    }
+  }
+}
