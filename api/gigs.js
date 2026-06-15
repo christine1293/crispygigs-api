@@ -31,7 +31,17 @@ export default async function handler(req, res) {
     const r = await fetch(base, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ dataCollectionId: COLLECTION_ID, dataItem: { data: { date, time, name, venue } } }),
+      body: JSON.stringify({
+        dataCollectionId: COLLECTION_ID,
+        dataItem: {
+          data: {
+            date: date,
+            time: time || '',
+            name: name,
+            venue: venue || ''
+          }
+        }
+      }),
     });
     const data = await r.json();
     return res.status(200).json(data);
