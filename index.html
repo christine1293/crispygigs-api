@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>脆樂團 Gigs</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #111; color: #fff; min-height: 100vh; padding: 2rem 1rem; }
+.container { max-width: 600px; margin: 0 auto; }
+.header { display: flex; align-items: center; gap: 10px; margin-bottom: 2rem; border-bottom: 1px solid #333; padding-bottom: 1rem; }
+.logo { font-size: 22px; font-weight: 600; }
+.logo span { color: #E07800; }
+.badges { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.badge { font-size: 12px; padding: 3px 10px; border-radius: 999px; font-weight: 500; }
+.badge-count { background: #E07800; color: #fff; }
+.badge-ok { background: #1a4a1a; color: #4caf50; }
+.badge-err { background: #4a1a1a; color: #f44336; }
+.badge-ing { background: #333; color: #aaa; }
+.gig-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1.5rem; min-height: 60px; }
+.gig-item { display: flex; align-items: center; gap: 10px; background: #1c1c1c; border: 1px solid #2a2a2a; border-radius: 10px; padding: 12px 16px; }
+.gig-date { font-size: 13px; font-weight: 600; color: #E07800; min-width: 40px; }
+.gig-time { font-size: 12px; color: #888; min-width: 42px; }
+.gig-name { font-size: 14px; flex: 1; font-weight: 500; }
+.gig-venue { font-size: 12px; color: #888; }
+.del-btn { background: none; border: none; cursor: pointer; color: #555; font-size: 18px; padding: 2px 6px; border-radius: 4px; transition: color 0.15s; }
+.del-btn:hover { color: #f44336; }
+.empty { color: #555; font-size: 14px; text-align: center; padding: 2rem 0; }
+.input-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.input-row input { flex: 1; font-size: 14px; background: #1c1c1c; border: 1px solid #333; border-radius: 10px; padding: 10px 14px; color: #fff; }
+.input-row input:focus { outline: none; border-color: #E07800; }
+.input-row input::placeholder { color: #555; }
+.add-btn { padding: 10px 20px; background: #E07800; color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.add-btn:hover { opacity: 0.85; }
+.add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.hint { font-size: 12px; color: #555; }
+.err { font-size: 12px; color: #f44336; margin-top: 6px; display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="logo"><span>脆</span>樂團 Gigs</div>
+    <div class="badges">
+      <div class="badge badge-count" id="count">0 場</div>
+      <div class="badge badge-ing" id="sync">載入中</div>
+    </div>
+  </div>
+  <div class="gig-list" id="gig-list"></div>
+  <div class="input-row">
+    <input id="input" placeholder="6/21 19:30 好好聽音樂節 華山" />
+    <button class="add-btn" id="add-btn">+ 新增</button>
+  </div>
+  <p class="hint">格式：月/日 時間（可省略）表演名稱 地點（可省略）</p>
+  <p class="err" id="err"></p>
+</div>
+<script>
+const API='/api/gigs';
+function parseGig(raw){const s=raw.trim();const m=s.match(/^(\d{1,2})\/(\d{1,2})\s*/);if(!m)return null;let rest=s.slice(m[0].length);const month=parseInt(m[1]),day=parseInt(m[2]);if(month<1||month>12||day<1||day>31)return null;let time=null;const tm=rest.match(/^(\d{1,2}:\d{2})\s*/);if(tm){time=tm[1];rest=rest.slice(tm[0].length);}const words=rest.trim().split(/\s+/);let name=rest.trim(),venue=null;if(words.length>=2){venue=words[words.length-1];name=words.slice(0,-1).join(' ');}return{month,day,time,name,venue};}
+function isExpired(item){const today=new Date();today.setHours(0,0,0,0);return item.data?.date?new Date(item.data.date)<today:false;}
+function setSync(state,text){const el=document.getElementById('sync');el.className='badge badge-'+state;el.textContent=text;}
+function render(items){const valid=items.filter(i=>!isExpired(i)).sort((a,b)=>new Date(a.data?.date)-new Date(b.data?.date));document.getElementById('count').textContent=valid.length+' 場';const list=document.getElementById('gig-list');if(!valid.length){list.innerHTML='<p class="empty">還沒有場次，快加第一場！</p>';return;}list.innerHTML=valid.map(item=>{const d=item.data||{};const date=d.date?new Date(d.date):null;const label=date?`${date.getMonth()+1}/${date.getDate()}`:'?';return`<div class="gig-item"><div class="gig-date">${label}</div><div class="gig-time">${d.time||''}</div><div class="gig-name">${d.name||''}</div>${d.venue?`<div class="gig-venue">📍${d.venue}</div>`:''}<button class="del-btn" data-id="${item.id}">×</button></div>`;}).join('');list.querySelectorAll('.del-btn').forEach(btn=>{btn.onclick=async()=>{setSync('ing','刪除中');await fetch(API,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:btn.dataset.id})});await load();};});}
+async function load(){setSync('ing','載入中');try{const r=await fetch(API);const data=await r.json();render(data.dataItems||[]);setSync('ok','Wix 已同步');}catch{setSync('err','連線失敗');}}
+document.getElementById('add-btn').onclick=async()=>{const val=document.getElementById('input').value.trim();const err=document.getElementById('err');if(!val)return;const gig=parseGig(val);if(!gig){err.textContent='格式不對，例如 6/21 好好聽音樂節 華山';err.style.display='block';return;}err.style.display='none';const now=new Date();const year=gig.month<now.getMonth()?now.getFullYear()+1:now.getFullYear();const dateStr=`${year}-${String(gig.month).padStart(2,'0')}-${String(gig.day).padStart(2,'0')}`;document.getElementById('add-btn').disabled=true;setSync('ing','新增中');await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:dateStr,time:gig.time||'',name:gig.name,venue:gig.venue||''})});document.getElementById('input').value='';document.getElementById('add-btn').disabled=false;await load();};
+document.getElementById('input').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('add-btn').click();});
+load();
+</script>
+</body>
+</html>
